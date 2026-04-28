@@ -22,7 +22,9 @@ export function renderDone(root) {
 
   root.innerHTML = `
     <header class="play-header">
-      <div class="play-header__brand sw-hero-mark"><span class="a">SPARK</span><span class="b">WORKS</span></div>
+      <a class="play-header__brand sw-hero-mark sw-mark-link" href="https://www.sparkworks.kids" target="_blank" rel="noopener">
+        <span class="a">SPARK</span><span class="b">WORKS</span>
+      </a>
       <p class="ts-eyebrow done__header-eyebrow">${closed ? 'CLOSED TOUR ✦' : 'TOUR COMPLETE'}</p>
       <span class="done__header-spacer"></span>
     </header>

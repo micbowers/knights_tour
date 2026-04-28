@@ -11,13 +11,14 @@ export function renderHome(root) {
   root.innerHTML = `
     <header class="sw-hero" style="text-align:center">
       <div class="sw-page">
-        <div class="sw-hero-mark"><span class="a">SPARK</span><span class="b">WORKS</span></div>
+        <a class="sw-hero-mark sw-mark-link" href="https://www.sparkworks.kids" target="_blank" rel="noopener">
+          <span class="a">SPARK</span><span class="b">WORKS</span>
+        </a>
         <p class="sw-foot-tag" style="margin-top:6px">Think through anything.</p>
       </div>
     </header>
 
     <main class="sw-page sw-body home">
-      <p class="ts-eyebrow home__eyebrow">SECTION 1 · PATTERNS</p>
       <h1 class="ts-display home__title">KNIGHT'S TOUR</h1>
       <p class="ts-quote home__sub">Can you visit every square exactly once?</p>
 
@@ -39,7 +40,9 @@ export function renderHome(root) {
     </main>
 
     <footer class="sw-foot">
-      <div class="sw-foot-mark"><span class="a">SPARK</span><span class="b">WORKS</span></div>
+      <a class="sw-foot-mark sw-mark-link" href="https://www.sparkworks.kids" target="_blank" rel="noopener">
+        <span class="a">SPARK</span><span class="b">WORKS</span>
+      </a>
       <div class="sw-foot-tag">School teaches content. We train how to think.</div>
     </footer>
   `;

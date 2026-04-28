@@ -28,6 +28,20 @@
 .sw-hero-mark .a { color: var(--sw-text-on-dark-full); }
 .sw-hero-mark .b { color: var(--sw-ember); }
 
+/* Wordmark anchor styling — looks identical to a static wordmark
+   but indicates clickability on hover. */
+a.sw-mark-link {
+  text-decoration: none;
+  display: inline-block;
+  transition: opacity 0.15s;
+}
+a.sw-mark-link:hover { opacity: 0.85; }
+a.sw-mark-link:focus-visible {
+  outline: 2px solid var(--sw-text-on-dark-full);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
 /* ---------- PATTERN C — FOOTER MARK ---------- */
 
 .sw-foot {

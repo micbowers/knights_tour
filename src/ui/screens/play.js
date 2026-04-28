@@ -30,7 +30,9 @@ export function renderPlay(root) {
 
   root.innerHTML = `
     <header class="play-header">
-      <div class="play-header__brand sw-hero-mark"><span class="a">SPARK</span><span class="b">WORKS</span></div>
+      <a class="play-header__brand sw-hero-mark sw-mark-link" href="https://www.sparkworks.kids" target="_blank" rel="noopener">
+        <span class="a">SPARK</span><span class="b">WORKS</span>
+      </a>
       <div id="move-counter-slot"></div>
       <button id="quit-btn" class="sw-btn sw-btn-subtle" type="button">Home</button>
     </header>
