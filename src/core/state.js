@@ -1,113 +1,155 @@
-import { generateAlienPool } from '../data/aliens.js';
+// Singleton state container with localStorage persistence + a tiny
+// pub/sub so screens can re-render on change. The shape is:
+//
+//   state = {
+//     screen: 'home' | 'play' | 'done',
+//     tour: Tour,                  // current tour (always present, even on home)
+//     prefs: { hintTier, soundOn, lastBoardSize },
+//     stats: { hintsUsed, undosUsed },
+//   }
+//
+// Mutations are package-private — engine wrappers call setTour/setScreen.
 
-const STORAGE_KEY = 'findthealien:state:v1';
-const V0_KEY = 'findthealien:state';
+import { createTour } from './engine.js';
+
+const STORAGE_KEY = 'sparkworks.knightstour.v1';
 const SCHEMA_VERSION = 1;
 
-// game.match shape:
-//   { huntIndex, totalHunts, currentRound, detectiveTrophies: [{huntIndex, teamId}] }
-// game.teams shape:
-//   [{id, name, elim, totalElim, totalTurns, detectiveCount}]
-//   - elim         : eliminations during the current hunt (resets each hunt)
-//   - totalElim    : eliminations across the whole match (cumulative)
-//   - totalTurns   : turns taken across the whole match
-//   - detectiveCount: hunts this team has won by narrowing to 1
-export const game = {
-  pool: [],
-  board: [],
-  secretAlien: null,
-  teams: [],
-  alive: new Set(),
-  moves: [],
-  started: false,
-  huntWinner: null,        // team id that won the CURRENT hunt
-  pendingReveal: null,
-  currentTeamIndex: 0,
-  match: null,
-  mode: 'team',            // 'team' | 'solo' — drives screen routing + celebration framing
-};
+const DEFAULT_BOARD_SIZE = 5;
 
-let v0Wiped = false;
+const listeners = new Set();
 
-export function wasV0Wiped() {
-  return v0Wiped;
+// Persistable subset of state. visitedIndices is serialized as an array
+// because Set isn't JSON-friendly.
+function serialize(s) {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    screen: s.screen,
+    tour: {
+      size: s.tour.size,
+      knightPos: s.tour.knightPos,
+      visited: Array.from(s.tour.visitedIndices),
+      history: s.tour.history,
+      startedAt: s.tour.startedAt,
+      completedAt: s.tour.completedAt,
+    },
+    prefs: { ...s.prefs },
+    stats: { ...s.stats },
+  };
 }
 
-export function saveState() {
-  try {
-    const serial = {
-      schemaVersion: SCHEMA_VERSION,
-      board: game.board,
-      secretAlien: game.secretAlien,
-      teams: game.teams,
-      alive: [...game.alive],
-      moves: game.moves,
-      started: game.started,
-      huntWinner: game.huntWinner,
-      pendingReveal: game.pendingReveal,
-      currentTeamIndex: game.currentTeamIndex,
-      match: game.match,
-      mode: game.mode,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serial));
-  } catch (e) { console.warn('save failed', e); }
+function deserialize(raw) {
+  if (!raw || raw.schemaVersion !== SCHEMA_VERSION) return null;
+  return {
+    screen: raw.screen ?? 'home',
+    tour: {
+      size: raw.tour.size,
+      knightPos: raw.tour.knightPos ?? null,
+      visitedIndices: new Set(raw.tour.visited ?? []),
+      history: raw.tour.history ?? [],
+      startedAt: raw.tour.startedAt ?? null,
+      completedAt: raw.tour.completedAt ?? null,
+    },
+    prefs: {
+      hintTier: raw.prefs?.hintTier ?? 0,
+      soundOn: raw.prefs?.soundOn ?? true,
+      lastBoardSize: raw.prefs?.lastBoardSize ?? DEFAULT_BOARD_SIZE,
+    },
+    stats: {
+      hintsUsed: raw.stats?.hintsUsed ?? 0,
+      undosUsed: raw.stats?.undosUsed ?? 0,
+      toursCompleted: raw.stats?.toursCompleted ?? 0,
+    },
+  };
 }
+
+function freshState() {
+  return {
+    screen: 'home',
+    tour: createTour(DEFAULT_BOARD_SIZE),
+    prefs: { hintTier: 0, soundOn: true, lastBoardSize: DEFAULT_BOARD_SIZE },
+    stats: { hintsUsed: 0, undosUsed: 0, toursCompleted: 0 },
+  };
+}
+
+let state = freshState();
 
 export function loadState() {
-  game.pool = generateAlienPool();
-
-  try {
-    if (localStorage.getItem(V0_KEY)) {
-      localStorage.removeItem(V0_KEY);
-      v0Wiped = true;
-    }
-  } catch (e) { /* ignore */ }
-
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
-    const s = JSON.parse(raw);
-    if (s.schemaVersion !== SCHEMA_VERSION) return false;
-    game.board = s.board || [];
-    game.secretAlien = s.secretAlien;
-    game.teams = s.teams || [];
-    for (const t of game.teams) {
-      if (typeof t.elim !== 'number') t.elim = 0;
-      if (typeof t.totalElim !== 'number') t.totalElim = 0;
-      if (typeof t.totalTurns !== 'number') t.totalTurns = 0;
-      if (typeof t.detectiveCount !== 'number') t.detectiveCount = 0;
-    }
-    game.alive = new Set(s.alive || []);
-    game.moves = s.moves || [];
-    game.started = !!s.started;
-    game.huntWinner = s.huntWinner ?? null;
-    game.pendingReveal = s.pendingReveal ?? null;
-    game.currentTeamIndex = s.currentTeamIndex ?? 0;
-    game.match = s.match || null;
-    game.mode = s.mode === 'solo' ? 'solo' : 'team';
-    return true;
-  } catch (e) {
-    console.warn('load failed', e);
-    return false;
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    const restored = deserialize(parsed);
+    if (restored) state = restored;
+  } catch {
+    // Bad payload — ignore and keep fresh state.
   }
 }
 
-export function resetEverything() {
-  game.pool = generateAlienPool();
-  game.board = [];
-  game.secretAlien = null;
-  game.teams = [];
-  game.alive = new Set();
-  game.moves = [];
-  game.started = false;
-  game.huntWinner = null;
-  game.pendingReveal = null;
-  game.currentTeamIndex = 0;
-  game.match = null;
-  game.mode = 'team';
-  saveState();
+function persist() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize(state)));
+  } catch {
+    // Quota exceeded or disabled — fail silently.
+  }
 }
 
-export function currentTeam() {
-  return game.teams[game.currentTeamIndex] || null;
+export function getState() {
+  return state;
+}
+
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+function notify() {
+  for (const fn of listeners) fn(state);
+}
+
+// Mutators — keep the surface small and explicit.
+
+export function setScreen(screen) {
+  state = { ...state, screen };
+  persist();
+  notify();
+}
+
+export function setTour(tour) {
+  state = { ...state, tour };
+  persist();
+  notify();
+}
+
+export function setPrefs(patch) {
+  state = { ...state, prefs: { ...state.prefs, ...patch } };
+  persist();
+  notify();
+}
+
+export function bumpStat(key) {
+  state = { ...state, stats: { ...state.stats, [key]: state.stats[key] + 1 } };
+  persist();
+  notify();
+}
+
+export function resetStats() {
+  // Per-tour stats reset; toursCompleted is lifetime — leave it alone.
+  state = {
+    ...state,
+    stats: { ...state.stats, hintsUsed: 0, undosUsed: 0 },
+  };
+  persist();
+  notify();
+}
+
+export function startFreshTour(size) {
+  state = {
+    ...state,
+    tour: createTour(size),
+    stats: { ...state.stats, hintsUsed: 0, undosUsed: 0 },
+    prefs: { ...state.prefs, lastBoardSize: size },
+  };
+  persist();
+  notify();
 }

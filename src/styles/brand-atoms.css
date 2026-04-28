@@ -1,0 +1,221 @@
+/* ============================================================
+   SPARKWORKS BRAND ATOMS
+   Mirrors Sparkworks/Website/sparkworks-site/app/globals.css
+   Patterns A–D, button hierarchy, layout helpers, form atoms,
+   on-dark utilities, responsive collapses.
+   ============================================================ */
+
+/* ---------- ON-DARK UTILITY CLASSES ---------- */
+
+.text-on-dark        { color: var(--sw-text-on-dark) !important; }
+.text-on-dark-full   { color: var(--sw-text-on-dark-full) !important; }
+.text-on-dark-muted  { color: var(--sw-text-on-dark-muted) !important; }
+
+/* ---------- PATTERN A — HERO HEADER ---------- */
+
+.sw-hero {
+  background: var(--sw-spark);
+  padding: 56px 40px 48px;
+  color: var(--sw-text-on-dark);
+}
+.sw-hero-mark {
+  font-family: var(--sw-display);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: 4px;
+  line-height: 1;
+}
+.sw-hero-mark .a { color: var(--sw-text-on-dark-full); }
+.sw-hero-mark .b { color: var(--sw-ember); }
+
+/* ---------- PATTERN C — FOOTER MARK ---------- */
+
+.sw-foot {
+  background: var(--sw-spark);
+  padding: 18px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.sw-foot-mark {
+  font-family: var(--sw-display);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+.sw-foot-mark .a { color: var(--sw-text-on-dark-full); }
+.sw-foot-mark .b { color: var(--sw-ember); }
+.sw-foot-tag {
+  font-family: var(--sw-body);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--sw-text-on-dark-muted);
+}
+
+/* ---------- PATTERN B — NUMBERED STEP PANEL ---------- */
+
+.sw-step {
+  background: var(--sw-white);
+  border: 1px solid var(--sw-bone);
+  border-radius: var(--sw-radius-md);
+  padding: 24px 28px;
+  margin-bottom: 18px;
+}
+.sw-step-active { border: 2px solid var(--sw-ember); padding: 23px 27px; }
+.sw-step-done   { opacity: 0.5; }
+.sw-step-done .sw-step-num { background: var(--sw-teal); }
+.sw-step-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.sw-step-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sw-steel);
+  color: var(--sw-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sw-display);
+  font-weight: 800;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.sw-step-body { margin-left: 50px; }
+
+/* ---------- PATTERN D — CALLOUT CARD ---------- */
+/* Bone White background is allowed here only — accent surface, not page. */
+
+.sw-callout {
+  background: var(--sw-bone);
+  border-left: 3px solid var(--sw-teal);
+  padding: 16px 20px;
+  margin: 18px 0;
+  border-radius: 0 var(--sw-radius-sm) var(--sw-radius-sm) 0;
+}
+.sw-callout-purple { border-left-color: var(--sw-purple); }
+.sw-callout-teal   { border-left-color: var(--sw-teal); }
+.sw-callout-ember  { border-left-color: var(--sw-ember); }
+.sw-callout-blue   { border-left-color: var(--sw-blue); }
+.sw-callout-red    { border-left-color: var(--sw-red); }
+
+/* ---------- BUTTON HIERARCHY ---------- */
+
+.sw-btn {
+  display: inline-block;
+  font-family: var(--sw-display);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 14px 28px;
+  border-radius: var(--sw-radius-sm);
+  border: 1.5px solid var(--sw-steel);
+  background: transparent;
+  color: var(--sw-steel);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sw-btn:hover { background: var(--sw-bone); }
+.sw-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sw-btn:disabled:hover { background: transparent; }
+
+.sw-btn-primary {
+  background: var(--sw-ember);
+  border-color: var(--sw-ember);
+  color: var(--sw-white);
+}
+.sw-btn-primary:hover { background: #B0401A; border-color: #B0401A; }
+.sw-btn-primary:disabled:hover { background: var(--sw-ember); border-color: var(--sw-ember); }
+
+.sw-btn-success {
+  background: var(--sw-teal);
+  border-color: var(--sw-teal);
+  color: var(--sw-white);
+}
+.sw-btn-success:hover { background: #178B91; border-color: #178B91; }
+
+.sw-btn-on-dark {
+  border-color: var(--sw-text-on-dark);
+  color: var(--sw-text-on-dark-full);
+}
+.sw-btn-on-dark:hover { background: rgba(255,255,255,0.1); }
+
+.sw-btn-subtle {
+  border: none;
+  padding: 8px 0;
+  letter-spacing: 1px;
+}
+.sw-btn-subtle:hover { background: transparent; text-decoration: underline; }
+
+/* ---------- LAYOUT HELPERS ---------- */
+
+.sw-page  { max-width: 1100px; margin: 0 auto; }
+.sw-body  { padding: 56px 40px; }
+.sw-section + .sw-section { margin-top: 56px; }
+
+.sw-card {
+  background: var(--sw-white);
+  border: 1px solid var(--sw-bone);
+  border-radius: var(--sw-radius-md);
+  padding: 28px 32px;
+}
+
+.sw-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.sw-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+/* ---------- FORM FIELDS ---------- */
+
+.sw-input,
+.sw-textarea,
+.sw-select {
+  font-family: var(--sw-body);
+  font-size: 1rem;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d8d4ca;
+  border-radius: var(--sw-radius-sm);
+  background: var(--sw-white);
+  color: var(--sw-steel);
+  transition: border-color 0.15s;
+}
+.sw-input:focus,
+.sw-textarea:focus,
+.sw-select:focus {
+  outline: none;
+  border-color: var(--sw-ember);
+}
+.sw-textarea { resize: vertical; min-height: 88px; }
+
+.sw-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.sw-field label {
+  font-family: var(--sw-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--sw-steel);
+}
+
+/* ---------- RESPONSIVE COLLAPSES ---------- */
+
+@media (max-width: 760px) {
+  .sw-grid-3, .sw-grid-2 { grid-template-columns: 1fr; }
+  .sw-body { padding: 36px 22px; }
+  .sw-hero { padding: 40px 22px 36px; }
+  .sw-foot { padding: 18px 22px; }
+}

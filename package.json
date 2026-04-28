@@ -1,8 +1,8 @@
 {
-  "name": "findthealien",
+  "name": "knights-tour",
   "version": "0.0.1",
   "private": true,
-  "description": "Find The Alien — a deduction game by Sparkworks. Web port of the classroom game.",
+  "description": "Knight's Tour — a pattern-recognition puzzle by Sparkworks. Web app companion to the Section 1 classroom worksheet.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,6 @@
     "vite": "^5.4.10"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
     "@vercel/analytics": "^2.0.1"
   }
 }

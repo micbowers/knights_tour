@@ -1,24 +1,25 @@
-* { box-sizing: border-box; }
+/* ============================================================
+   GLOBAL RESET + BASE DEFAULTS
+   Mirrors Sparkworks/Website/sparkworks-site/app/globals.css
+   ============================================================ */
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background: var(--white);
-  color: var(--steel);
-  font-family: var(--font-stack);
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--sw-body);
+  color: var(--sw-steel);
+  background: var(--sw-white);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
-body { min-height: 100vh; }
-
-a { color: var(--ember); }
-a:hover { color: var(--steel); }
+a { color: inherit; }
 
 button { font-family: inherit; cursor: pointer; }
 
 img { max-width: 100%; display: block; }
 
-h1, h2, h3 { margin: 0; }
-
-p { margin: 0 0 12px; }
-
-input, select { font-family: inherit; }
+input, select, textarea { font-family: inherit; }

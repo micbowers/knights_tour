@@ -1,89 +1,115 @@
-import { game } from '../../core/state.js';
-import { renderAlienHTML } from '../../data/aliens.js';
+// Done screen — two-column layout so the celebration (board + trail
+// animation) sits beside the actionable stats, fact reveal, and CTAs.
+// User can see everything in one viewport without scrolling.
 
-const PB_KEY = 'findthealien:solo-best';
+import { renderBoard } from '../components/board.js';
+import { renderFactDeck } from '../components/factDeck.js';
+import { isClosedTour, totalSquares } from '../../core/engine.js';
+import { getState, setScreen, startFreshTour } from '../../core/state.js';
 
-const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-})[c]);
+const NEXT_SIZE = { 5: 6, 6: 7, 7: 8, 8: 8 };
 
-function readPB() {
-  try {
-    const raw = localStorage.getItem(PB_KEY);
-    if (!raw) return null;
-    const n = parseInt(raw, 10);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  } catch { return null; }
-}
+export function renderDone(root) {
+  const { tour, stats } = getState();
+  const closed = isClosedTour(tour);
+  const total = totalSquares(tour);
+  const elapsed = tour.completedAt && tour.startedAt
+    ? Math.round((tour.completedAt - tour.startedAt) / 1000)
+    : null;
 
-function writePB(n) {
-  try { localStorage.setItem(PB_KEY, String(n)); } catch { /* ignore */ }
-}
+  // Player just completed their toursCompleted-th tour, so they unlock fact[toursCompleted - 1].
+  const factIndex = Math.max(0, stats.toursCompleted - 1);
 
-export function renderSoloDoneScreen(container, { onPlayAgain, onHome }) {
-  const score = game.teams[0]?.totalTurns ?? 0;
-  const secret = game.secretAlien;
-  const previousPB = readPB();
-  const isFirstWin = previousPB == null;
-  const isNewPB = !isFirstWin && score < previousPB;
+  root.innerHTML = `
+    <header class="play-header">
+      <div class="play-header__brand sw-hero-mark"><span class="a">SPARK</span><span class="b">WORKS</span></div>
+      <p class="ts-eyebrow done__header-eyebrow">${closed ? 'CLOSED TOUR ✦' : 'TOUR COMPLETE'}</p>
+      <span class="done__header-spacer"></span>
+    </header>
 
-  // Persist if new best (or first win).
-  if (isFirstWin || isNewPB) writePB(score);
-
-  let pbHtml;
-  if (isFirstWin) {
-    pbHtml = `
-      <div class="solo-pb-badge is-new">
-        🎯 First win recorded — your personal best is now <b>${score}</b>!
-      </div>
-    `;
-  } else if (isNewPB) {
-    pbHtml = `
-      <div class="solo-pb-badge is-new">
-        🏆 New personal best! Beat your previous of <b>${previousPB}</b> by <b>${previousPB - score}</b>.
-      </div>
-    `;
-  } else if (score === previousPB) {
-    pbHtml = `
-      <div class="solo-pb-badge">
-        Tied your personal best of <b>${previousPB}</b>.
-      </div>
-    `;
-  } else {
-    pbHtml = `
-      <div class="solo-pb-badge">
-        Personal best: <b>${previousPB}</b> · this run: <b>${score}</b>
-      </div>
-    `;
-  }
-
-  container.innerHTML = `
-    <div class="panel solo-done-card">
-      <div class="solo-done-headline">🎯 You found ${escape(secret?.name ?? 'the alien')}!</div>
-
-      <div class="solo-done-alien">
-        <div class="alien-card celebration-alien-card">
-          <div class="alien-svg-wrap">${secret ? renderAlienHTML(secret) : ''}</div>
-          <div class="alien-name">${escape(secret?.name ?? '?')}</div>
+    <main class="done-main">
+      <section class="done-board-pane">
+        <h1 class="ts-h1 done__title">${closed ? 'You closed the loop.' : 'You did it.'}</h1>
+        <p class="ts-quote done__sub">All ${total} squares visited.</p>
+        <div class="done__board" id="done-board"></div>
+        <div class="done__stats sw-card">
+          <div class="done__stat">
+            <span class="ts-label">Board</span>
+            <span class="ts-h2">${tour.size} × ${tour.size}</span>
+          </div>
+          <div class="done__stat">
+            <span class="ts-label">Time</span>
+            <span class="ts-h2">${elapsed !== null ? `${elapsed}s` : '—'}</span>
+          </div>
+          <div class="done__stat">
+            <span class="ts-label">Undos</span>
+            <span class="ts-h2">${stats.undosUsed}</span>
+          </div>
+          <div class="done__stat">
+            <span class="ts-label">Hints</span>
+            <span class="ts-h2">${stats.hintsUsed}</span>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="solo-result-stack">
-        <div class="solo-score">
-          <div class="solo-score-label">QUESTIONS ASKED</div>
-          <div class="solo-score-value">${score}</div>
+      <aside class="done-rail">
+        <div id="done-fact"></div>
+        <div class="done__cta-row">
+          <button id="next-size-btn" class="sw-btn sw-btn-primary" type="button">
+            ${tour.size < 8 ? `Try ${NEXT_SIZE[tour.size]} × ${NEXT_SIZE[tour.size]}` : 'Same board again'}
+          </button>
+          ${tour.size < 8 ? `<button id="same-btn" class="sw-btn" type="button">Same board again</button>` : ''}
+          <button id="home-btn" class="sw-btn" type="button">Pick a different board</button>
         </div>
-
-        ${pbHtml}
-      </div>
-
-      <div class="solo-done-actions">
-        <button class="btn big" id="sd-again">▶ Play again</button>
-        <button class="btn outline" id="sd-home">← Home</button>
-      </div>
-    </div>
+      </aside>
+    </main>
   `;
 
-  container.querySelector('#sd-again').addEventListener('click', () => onPlayAgain && onPlayAgain());
-  container.querySelector('#sd-home').addEventListener('click', () => onHome && onHome());
+  const boardSlot = root.querySelector('#done-board');
+  renderBoard(boardSlot, {
+    tour,
+    onSquareClick: () => {},
+    highlightLegal: false,
+  });
+
+  // Compute polyline length so the trail draw-in animation works across all board sizes.
+  const polyline = boardSlot.querySelector('.board-trail polyline');
+  if (polyline) {
+    try {
+      const len = polyline.getTotalLength();
+      polyline.style.setProperty('--len', String(Math.ceil(len)));
+    } catch {
+      /* fallback in CSS */
+    }
+  }
+
+  // Fact reveal — expanded by default so the new fact reads as a reward.
+  let factOpen = true;
+  const factSlot = root.querySelector('#done-fact');
+  const renderFact = () => {
+    renderFactDeck(factSlot, {
+      factIndex,
+      expanded: factOpen,
+      onToggle: () => { factOpen = !factOpen; renderFact(); },
+    });
+  };
+  renderFact();
+
+  root.querySelector('#next-size-btn').addEventListener('click', () => {
+    const next = tour.size < 8 ? NEXT_SIZE[tour.size] : tour.size;
+    startFreshTour(next);
+    setScreen('play');
+  });
+
+  const sameBtn = root.querySelector('#same-btn');
+  if (sameBtn) {
+    sameBtn.addEventListener('click', () => {
+      startFreshTour(tour.size);
+      setScreen('play');
+    });
+  }
+
+  root.querySelector('#home-btn').addEventListener('click', () => {
+    setScreen('home');
+  });
 }

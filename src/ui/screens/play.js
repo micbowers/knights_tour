@@ -1,366 +1,219 @@
-import { game, currentTeam } from '../../core/state.js';
-import { commitAsk, continueAfterReveal, startNextHunt, undoLastMove, restartMatchKeepTeams } from '../../core/engine.js';
-import { getCoachOn, setCoachOn } from '../../core/prefs.js';
-import { gmSpeak, clear as gmClear } from '../../core/gm.js';
-import { playSFX, playAlienVoice, preloadAlienVoice, pruneAlienVoiceCacheExcept } from '../../core/audio.js';
-import { renderAlienGrid } from '../components/alienGrid.js';
-import { renderEvidenceRail } from '../components/evidenceRail.js';
-import { renderScoreboard } from '../components/scoreboard.js';
-import { renderSplitPreview, computeSplit } from '../components/splitPreview.js';
-import { renderQuestionPicker } from '../components/questionInput.js';
-import { renderRevealCard } from '../components/revealCard.js';
-import { renderTurnBanner } from '../components/turnBanner.js';
+// Play screen — board + counter + controls + side rail (hints, tip, fact).
+// Stuck overlay slides in when no legal moves remain.
 
-const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-})[c]);
+import { renderBoard } from '../components/board.js';
+import { moveCounterHtml } from '../components/moveCounter.js';
+import { renderHintControls } from '../components/hintControls.js';
+import { renderTipCard } from '../components/tipCard.js';
+import { renderFactDeck } from '../components/factDeck.js';
+import { showStuckOverlay, dismissStuckOverlay } from '../components/stuckOverlay.js';
+import {
+  placeKnight, moveKnight, undoMove, backUp,
+  isComplete, isStuck, isPlaced, isLegalMove, isLegalPlacement,
+} from '../../core/engine.js';
+import { suggestBestMove, legalMoveCounts, HINT_BUDGET } from '../../core/hints.js';
+import {
+  getState, setTour, setScreen, setPrefs, bumpStat, startFreshTour,
+} from '../../core/state.js';
+import { playSFX } from '../../core/audio.js';
+import { TIPS } from '../../data/tips.js';
 
-// playMode:
-//   'idle'           — turn banner + Ask button
-//   'asking'         — question picker + split preview
-//   'reveal'         — answer reveal card + Continue button
-//   'between-hunts'  — hunt-complete summary + start-next-hunt button
-let playMode = 'idle';
-let previewedQid = null;
+const TIP_ROTATE_MS = 30000;
 
-export function setPlayMode(mode) {
-  playMode = mode;
-  previewedQid = null;
-}
-export function getPlayMode() {
-  return playMode;
-}
+export function renderPlay(root) {
+  // Per-screen ephemeral state.
+  let tipIndex = Math.floor(Math.random() * TIPS.length);
+  let factExpanded = true; // Default open — kids should see the cool facts.
+  let highlightedSquare = null;     // briefly set when "Hint" pressed
+  let highlightTimer = null;
+  let tipTimer = null;
 
-export function renderPlayScreen(container, { onMatchDone, onResetMatch }) {
-  // Build the layout shell once per render — components paint into named slots.
-  const huntIdx = game.match?.huntIndex ?? 1;
-  const totalHunts = game.match?.totalHunts ?? 1;
+  root.innerHTML = `
+    <header class="play-header">
+      <div class="play-header__brand sw-hero-mark"><span class="a">SPARK</span><span class="b">WORKS</span></div>
+      <div id="move-counter-slot"></div>
+      <button id="quit-btn" class="sw-btn sw-btn-subtle" type="button">Home</button>
+    </header>
 
-  container.innerHTML = `
-    <div class="play-split">
-      <div class="play-grid-col">
-        <div class="panel">
-          <h2 id="play-grid-title">Alien field — Hunt ${huntIdx} of ${totalHunts}</h2>
-          <div class="alien-grid" id="play-grid"></div>
+    <main class="play-main">
+      <section class="play-board-pane">
+        <div id="board-slot"></div>
+        <div class="play-controls">
+          <button id="undo-btn" class="sw-btn" type="button">Undo</button>
+          <button id="restart-btn" class="sw-btn" type="button">Restart</button>
+          <button id="sound-btn" class="sw-btn sw-btn-subtle" type="button" aria-pressed="true">Sound: on</button>
         </div>
-      </div>
-      <div class="play-controls-col">
-        <div class="stats-row">
-          <div class="stat alive">
-            <div class="label">ALIVE</div>
-            <div class="value" id="stat-alive">${game.alive.size}</div>
-            <div class="sub">of 24</div>
-          </div>
-          <div class="stat elim">
-            <div class="label">QUESTIONS</div>
-            <div class="value" id="stat-questions">${game.moves.filter(m => m.type === 'ask').length}</div>
-            <div class="sub">this hunt</div>
-          </div>
-        </div>
+        <p class="ts-caption play-hint">Click a square to place the knight.</p>
+      </section>
 
-        <div style="display:flex;justify-content:flex-end;">
-          <button class="coach-toggle" id="play-coach-toggle" type="button">
-            <span>🎓 Elimination Coach</span>
-            <span class="coach-state" id="play-coach-state">ON</span>
-          </button>
-        </div>
-
-        <div id="play-turn-banner"></div>
-        <div id="play-panel-main"></div>
-        <div id="play-scoreboard" class="panel"></div>
-        <div id="play-evidence-rail" class="evidence-rail"></div>
-
-        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
-          <button class="btn outline" id="play-undo">↶ Undo last</button>
-          <button class="btn outline" id="play-restart">⟲ Restart match</button>
-        </div>
-      </div>
-    </div>
-    <div id="play-modal-host"></div>
+      <aside class="play-rail">
+        <div id="hint-slot"></div>
+        <div id="tip-slot"></div>
+        <div id="fact-slot"></div>
+      </aside>
+    </main>
   `;
 
-  const gridEl = container.querySelector('#play-grid');
-  const bannerEl = container.querySelector('#play-turn-banner');
-  const mainEl = container.querySelector('#play-panel-main');
-  const sbEl = container.querySelector('#play-scoreboard');
-  const evidenceEl = container.querySelector('#play-evidence-rail');
+  const boardSlot = root.querySelector('#board-slot');
+  const counterSlot = root.querySelector('#move-counter-slot');
+  const hintSlot = root.querySelector('#hint-slot');
+  const tipSlot = root.querySelector('#tip-slot');
+  const factSlot = root.querySelector('#fact-slot');
+  const undoBtn = root.querySelector('#undo-btn');
+  const restartBtn = root.querySelector('#restart-btn');
+  const quitBtn = root.querySelector('#quit-btn');
+  const soundBtn = root.querySelector('#sound-btn');
+  const playHint = root.querySelector('.play-hint');
+  const mainEl = root.querySelector('.play-main');
 
-  function paintMainPanel() {
-    if (playMode === 'idle') {
-      const team = currentTeam();
-      mainEl.innerHTML = `
-        <div class="panel">
-          <h2>Your move</h2>
-          <p class="panel-tip">${team ? escape(team.name) : 'Someone'}, pick a question that splits the remaining aliens roughly in half. Good questions eliminate the most.</p>
-          <button class="btn big" id="btn-ask">Ask a question</button>
-        </div>
-      `;
-      mainEl.querySelector('#btn-ask').addEventListener('click', () => {
-        setPlayMode('asking');
-        repaint();
-      });
-    } else if (playMode === 'asking') {
-      mainEl.innerHTML = `
-        <div class="panel">
-          <h2>Pick a question</h2>
-          <div id="split-slot"></div>
-          <div id="picker-slot"></div>
-          <div style="display:flex;gap:8px;margin-top:12px;">
-            <button class="btn outline" id="btn-cancel-ask">Back</button>
-          </div>
-        </div>
-      `;
-      const splitSlot = mainEl.querySelector('#split-slot');
-      const pickerSlot = mainEl.querySelector('#picker-slot');
-      renderQuestionPicker(pickerSlot, {
-        onSelect: (qid) => {
-          // Snapshot alive count BEFORE the question; commitAsk mutates game.alive.
-          const aliveBefore = game.alive.size;
-          commitAsk(qid);
-          const move = game.pendingReveal;
-          const secretName = game.secretAlien?.name;
+  function rerender() {
+    const { tour, prefs, stats } = getState();
+    const tier = prefs.hintTier;
+    const counts = (tier === 2 && tour.knightPos) ? legalMoveCounts(tour) : null;
 
-          // SFX always: tonal blip for YES/NO + a poof if anyone got eliminated.
-          if (move) {
-            playSFX(move.answer ? 'reveal-yes' : 'reveal-no');
-            if (move.eliminated > 0) playSFX('eliminate');
-          }
-
-          if (game.huntWinner) {
-            // Hunt won — skip move-quality commentary and play the climactic
-            // "you found me" line over the win fanfare instead.
-            const winner = game.teams.find(t => t.id === game.huntWinner);
-            gmSpeak('detective_won_hunt', {
-              team: winner?.name ?? '—',
-              n: game.match?.huntIndex ?? 1,
-              alien: game.secretAlien?.name ?? '?',
-            });
-            playSFX('hunt-won');
-            if (secretName) setTimeout(() => playAlienVoice(secretName, 'found_me'), 700);
-          } else if (move && secretName) {
-            // Hunt continues — alien comments on the player's move quality.
-            // Buckets mirror the Elimination Coach split-quality labels.
-            const fraction = aliveBefore > 0 ? move.eliminated / aliveBefore : 0;
-            const bucket = fraction >= 0.40 ? 'great_move'
-                         : fraction >= 0.15 ? 'okay_move'
-                         : 'bad_move';
-            setTimeout(() => playAlienVoice(secretName, bucket), 220);
-          }
-
-          setPlayMode('reveal');
-          repaint();
-        },
-        onPreview: (qid) => {
-          previewedQid = qid;
-          renderSplitPreview(splitSlot, qid);
-          // Re-highlight the alien grid
-          const split = qid ? computeSplit(qid) : null;
-          renderAlienGrid(gridEl, {
-            previewMatchIds: split ? split.yesNames : null,
-          });
-        },
-      });
-      mainEl.querySelector('#btn-cancel-ask').addEventListener('click', () => {
-        setPlayMode('idle');
-        repaint();
-      });
-    } else if (playMode === 'reveal') {
-      const move = game.pendingReveal;
-      mainEl.innerHTML = `
-        <div class="panel">
-          <h2>Result</h2>
-          <div id="reveal-slot"></div>
-          <button class="btn big" id="btn-continue" style="margin-top:8px;">Continue ▶</button>
-        </div>
-      `;
-      renderRevealCard(mainEl.querySelector('#reveal-slot'), move);
-      mainEl.querySelector('#btn-continue').addEventListener('click', () => {
-        const next = continueAfterReveal();
-        if (next === 'between-hunts') {
-          setPlayMode('between-hunts');
-          repaint();
-        } else if (next === 'match-done') {
-          if (onMatchDone) onMatchDone();
-        } else {
-          setPlayMode('idle');
-          repaint();
-        }
-      });
-    } else if (playMode === 'between-hunts') {
-      const winnerTeam = game.teams.find(t => t.id === game.huntWinner);
-      const secretName = game.secretAlien?.name ?? '—';
-      const nextHunt = (game.match?.huntIndex ?? 1) + 1;
-      // After endHunt the team rotation hasn't happened yet; the first team in
-      // teams[] is still the previous starter. The next starter will be teams[1]
-      // (which becomes teams[0] after startNextHunt's shift/push).
-      const nextStarter = game.teams.length > 1 ? game.teams[1] : game.teams[0];
-      mainEl.innerHTML = `
-        <div class="panel">
-          <h2>★ Hunt ${game.match.huntIndex} complete</h2>
-          <p class="panel-tip">
-            ${winnerTeam ? `<b>${escape(winnerTeam.name)}</b> cracked it — the alien was <b>${escape(secretName)}</b>.` : `The alien was <b>${escape(secretName)}</b>.`}
-            ${nextStarter ? ` <b>${escape(nextStarter.name)}</b> starts Hunt ${nextHunt}.` : ''}
-          </p>
-          <button class="btn big" id="btn-next-hunt">▶ Start Hunt ${nextHunt} of ${game.match.totalHunts}</button>
-        </div>
-      `;
-      mainEl.querySelector('#btn-next-hunt').addEventListener('click', () => {
-        startNextHunt();
-        // Preload the new hunt's secret alien voice clips; drop the previous.
-        const newSecret = game.secretAlien?.name;
-        pruneAlienVoiceCacheExcept(newSecret);
-        if (newSecret) preloadAlienVoice(newSecret);
-        gmSpeak('hunt_start', {
-          n: game.match?.huntIndex ?? 1,
-          total: game.match?.totalHunts ?? 1,
-          starter: game.teams[0]?.name ?? '—',
-        });
-        setPlayMode('idle');
-        repaint();
-      });
-    }
-  }
-
-  function repaint() {
-    const huntIdxNow = game.match?.huntIndex ?? 1;
-    const totalHuntsNow = game.match?.totalHunts ?? 1;
-    container.querySelector('#play-grid-title').textContent =
-      `Alien field — Hunt ${huntIdxNow} of ${totalHuntsNow}`;
-    container.querySelector('#stat-alive').textContent = game.alive.size;
-    container.querySelector('#stat-questions').textContent = game.moves.filter(m => m.type === 'ask').length;
-
-    // Show grid with reveal-secret highlight only when between hunts (hunt is over)
-    const revealSecret = playMode === 'between-hunts';
-    renderAlienGrid(gridEl, { revealSecret });
-
-    renderTurnBanner(bannerEl);
-    paintMainPanel();
-    sbEl.innerHTML = '';
-    renderScoreboard(sbEl, {
-      highlightDetective: !!game.huntWinner,
-      // Keep the Eliminator Champion badge live throughout the match, not
-      // just at hunt-end, so the running leader is always visible. Otherwise
-      // the Detective badge appears alone during the celebration card and
-      // reads like the only winner — but Eliminator Champion is the headline
-      // prize.
-      highlightLeader: true,
-      activeTeamId: playMode === 'idle' ? currentTeam()?.id : null,
+    renderBoard(boardSlot, {
+      tour,
+      onSquareClick: handleSquareClick,
+      highlightLegal: tier >= 1,
+      legalCounts: counts,
+      highlightedSquare,
     });
-    renderEvidenceRail(evidenceEl);
-  }
+    counterSlot.innerHTML = moveCounterHtml(tour);
+    undoBtn.disabled = tour.history.length === 0;
 
-  // Coach toggle
-  function paintCoachToggle() {
-    const btn = container.querySelector('#play-coach-toggle');
-    const stateEl = container.querySelector('#play-coach-state');
-    if (!btn || !stateEl) return;
-    const on = getCoachOn();
-    btn.classList.toggle('on', on);
-    btn.classList.toggle('off', !on);
-    stateEl.textContent = on ? 'ON' : 'OFF';
-    btn.title = on
-      ? 'Hide the YES/NO split panel and grid hints'
-      : 'Show the YES/NO split panel and grid hints';
-  }
-  container.querySelector('#play-coach-toggle').addEventListener('click', () => {
-    setCoachOn(!getCoachOn());
-    paintCoachToggle();
-    // Re-render whatever depends on coach state. If we're previewing a question,
-    // refresh the split panel + grid.
-    if (playMode === 'asking' && previewedQid) {
-      const splitSlot = container.querySelector('#split-slot');
-      if (splitSlot) renderSplitPreview(splitSlot, previewedQid);
-      const split = computeSplit(previewedQid);
-      renderAlienGrid(gridEl, {
-        previewMatchIds: split ? split.yesNames : null,
-      });
-    } else if (playMode === 'asking') {
-      // No previewed qid yet — clear the panel.
-      const splitSlot = container.querySelector('#split-slot');
-      if (splitSlot) splitSlot.innerHTML = '';
-      renderAlienGrid(gridEl);
-    }
-  });
-
-  // Restart-match confirmation modal
-  container.querySelector('#play-restart').addEventListener('click', () => {
-    showRestartModal(container, {
-      onKeepTeams: () => {
-        restartMatchKeepTeams();
-        gmClear();
-        const newSecret = game.secretAlien?.name;
-        pruneAlienVoiceCacheExcept(newSecret);
-        if (newSecret) preloadAlienVoice(newSecret);
-        gmSpeak('match_start', {
-          hunts: game.match?.totalHunts ?? game.teams.length,
-          teams: game.teams.length,
-          board: game.board.length,
-        });
-        gmSpeak('hunt_start', {
-          n: 1,
-          total: game.match?.totalHunts ?? game.teams.length,
-          starter: game.teams[0]?.name ?? '—',
-        });
-        setPlayMode('idle');
-        repaint();
-      },
-      onChooseNew: () => {
-        onResetMatch && onResetMatch();
-      },
+    renderHintControls(hintSlot, {
+      tier,
+      onTierChange: (t) => { setPrefs({ hintTier: t }); rerender(); },
+      hintsUsed: stats.hintsUsed,
+      hintEnabled: isPlaced(tour) && !isComplete(tour),
+      onHintRequest: handleHintRequest,
     });
-  });
+    renderTipCard(tipSlot, {
+      index: tipIndex,
+      onShuffle: () => { tipIndex = (tipIndex + 1) % TIPS.length; rerender(); },
+    });
+    renderFactDeck(factSlot, {
+      factIndex: stats.toursCompleted,
+      expanded: factExpanded,
+      onToggle: () => { factExpanded = !factExpanded; rerender(); },
+    });
 
-  // Undo
-  container.querySelector('#play-undo').addEventListener('click', () => {
-    const ok = undoLastMove();
-    if (ok) {
-      setPlayMode('idle');
-      repaint();
+    soundBtn.textContent = prefs.soundOn ? 'Sound: on' : 'Sound: off';
+    soundBtn.setAttribute('aria-pressed', String(prefs.soundOn));
+
+    if (!isPlaced(tour)) {
+      playHint.textContent = 'Click any square to place the knight.';
+    } else if (isComplete(tour)) {
+      playHint.textContent = 'Tour complete!';
+    } else if (isStuck(tour)) {
+      playHint.textContent = "No legal moves. Use the buttons below or the popup to back up.";
+      // Trigger the overlay once per stuck-state entry.
+      showStuckOverlay(mainEl, {
+        visited: tour.history.length,
+        total: tour.size * tour.size,
+        onBackUp: (n) => { setTour(backUp(getState().tour, n)); rerender(); },
+        onRestart: () => { startFreshTour(getState().tour.size); rerender(); },
+        onDismiss: () => {},
+      });
+    } else {
+      playHint.textContent = 'Click any glowing square to keep going.';
+      dismissStuckOverlay(mainEl);
     }
+  }
+
+  function handleSquareClick(square) {
+    const { tour } = getState();
+    if (isComplete(tour)) return;
+
+    if (!isPlaced(tour)) {
+      if (!isLegalPlacement(tour, square)) return;
+      setTour(placeKnight(tour, square));
+      playSFX('move');
+      rerender();
+      return;
+    }
+
+    if (!isLegalMove(tour, square)) {
+      playSFX('illegal');
+      flashIllegal(square);
+      return;
+    }
+
+    const next = moveKnight(tour, square);
+    setTour(next);
+
+    if (isComplete(next)) {
+      playSFX('tour-complete');
+      bumpStat('toursCompleted');
+      setTimeout(() => setScreen('done'), 500);
+      rerender();
+      return;
+    }
+
+    if (isStuck(next)) playSFX('stuck');
+    else playSFX('move');
+    rerender();
+  }
+
+  function handleHintRequest() {
+    const { tour, stats } = getState();
+    if (!isPlaced(tour) || isComplete(tour)) return;
+    if (stats.hintsUsed >= HINT_BUDGET) return;
+    const best = suggestBestMove(tour);
+    if (!best) return;
+    bumpStat('hintsUsed');
+    playSFX('hint');
+    highlightedSquare = best;
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+      highlightedSquare = null;
+      if (getState().screen === 'play') rerender();
+    }, 1800);
+    rerender();
+  }
+
+  function flashIllegal(square) {
+    const sel = `.board-sq[data-file="${square.file}"][data-rank="${square.rank}"]`;
+    const el = boardSlot.querySelector(sel);
+    if (!el) return;
+    el.classList.add('board-sq--shake');
+    setTimeout(() => el.classList.remove('board-sq--shake'), 350);
+  }
+
+  undoBtn.addEventListener('click', () => {
+    const { tour } = getState();
+    if (tour.history.length === 0) return;
+    setTour(undoMove(tour));
+    bumpStat('undosUsed');
+    rerender();
   });
 
-  paintCoachToggle();
-  repaint();
-}
+  restartBtn.addEventListener('click', () => {
+    const { tour } = getState();
+    startFreshTour(tour.size);
+    rerender();
+  });
 
-function showRestartModal(container, { onKeepTeams, onChooseNew }) {
-  const host = container.querySelector('#play-modal-host');
-  if (!host) return;
-  const isSolo = game.mode === 'solo';
-  // The two button handlers are the same in both modes (onKeepTeams calls
-  // restartMatchKeepTeams which preserves mode + names; onChooseNew exits to
-  // home). Only the copy changes so solo players don't see "teams".
-  const heading = isSolo ? 'Try a new alien?' : 'Restart match?';
-  const body = isSolo
-    ? 'This drops your current alien and starts fresh. Your personal best is safe.'
-    : 'This wipes the current scores and starts a new match. Want to keep your teams or choose new ones?';
-  const keepLabel = isSolo ? 'Pick a new alien' : 'Keep these teams';
-  const newLabel  = isSolo ? 'Back to home'    : 'Choose new teams';
+  quitBtn.addEventListener('click', () => {
+    if (tipTimer) clearInterval(tipTimer);
+    setScreen('home');
+  });
 
-  host.innerHTML = `
-    <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal-confirm" role="dialog" aria-modal="true">
-        <h3>${heading}</h3>
-        <p>${body}</p>
-        <div class="modal-buttons">
-          <button class="btn" id="modal-keep">${keepLabel}</button>
-          <button class="btn outline" id="modal-new">${newLabel}</button>
-        </div>
-        <button class="modal-cancel" id="modal-cancel">cancel</button>
-      </div>
-    </div>
-  `;
-  const close = () => { host.innerHTML = ''; };
-  host.querySelector('#modal-backdrop').addEventListener('click', e => {
-    if (e.target.id === 'modal-backdrop') close();
+  soundBtn.addEventListener('click', () => {
+    setPrefs({ soundOn: !getState().prefs.soundOn });
+    rerender();
   });
-  host.querySelector('#modal-cancel').addEventListener('click', close);
-  host.querySelector('#modal-keep').addEventListener('click', () => {
-    close();
-    onKeepTeams && onKeepTeams();
-  });
-  host.querySelector('#modal-new').addEventListener('click', () => {
-    close();
-    onChooseNew && onChooseNew();
-  });
+
+  // Auto-rotate the tip every 30 seconds. Self-cleans when the user
+  // leaves the play screen (interval keeps firing otherwise).
+  tipTimer = setInterval(() => {
+    if (getState().screen !== 'play') {
+      clearInterval(tipTimer);
+      return;
+    }
+    tipIndex = (tipIndex + 1) % TIPS.length;
+    rerender();
+  }, TIP_ROTATE_MS);
+
+  rerender();
 }

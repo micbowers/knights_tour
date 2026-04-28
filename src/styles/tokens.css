@@ -1,15 +1,38 @@
-:root {
-  --steel: #1E2530;
-  --ember: #D4501A;
-  --teal: #0E9E8A;
-  --yellow: #F5C400;
-  --arc: #3B7DD8;
-  --bone: #F2EFE8;
-  --purple: #8B4FD8;
-  --gray: #6B6B6B;
-  --lightgray: #E8E8E8;
-  --softgray: #F4F4F4;
-  --white: #FFFFFF;
+/* ============================================================
+   SPARKWORKS BRAND TOKENS
+   Mirrors Sparkworks/Website/sparkworks-site/app/globals.css
+   See Sparkworks/Brand guidlines and tools/SPARKWORKS_BRAND_REF.md
+   ============================================================ */
 
-  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+:root {
+  /* Fonts */
+  --sw-display: "Barlow Condensed", Arial, sans-serif;
+  --sw-body: "Merriweather", Georgia, serif;
+
+  /* Anchors — dark surfaces */
+  --sw-steel: #1E2530;     /* Default text & headings */
+  --sw-spark: #1A5C82;     /* Primary identity — wordmark hero, footer, primary CTAs */
+
+  /* Section accents — sprint colors + brand accent */
+  --sw-purple: #9447D6;    /* Section 1 — See What Others Miss (Knight's Tour lives here) */
+  --sw-teal:   #1FA8AE;    /* Section 2 — Understand the System. Also: success/progress */
+  --sw-ember:  #D4501A;    /* Section 3 — Decide Without All the Facts. Also: brand accent (CTAs) */
+  --sw-blue:   #2A85C2;    /* Section 4 — Think Beyond What You Control. Also: track labels */
+
+  /* Specials — used sparingly */
+  --sw-red:    #CF2C38;    /* Capstone events, alerts, urgency. One per page max. */
+  --sw-yellow: #F5C400;    /* Celebration / Da Vinci Badge — rare */
+
+  /* Neutrals */
+  --sw-bone:   #F2EFE8;    /* Accent surfaces — callouts, table rows. NEVER as main background. NEVER as text. */
+  --sw-white:  #FFFFFF;    /* Default page background */
+
+  /* Light text on dark */
+  --sw-text-on-dark:       rgba(255,255,255,0.85); /* Default for any white text on dark */
+  --sw-text-on-dark-full:  #FFFFFF;                /* One element per dark surface, max — the largest header */
+  --sw-text-on-dark-muted: rgba(255,255,255,0.6);  /* Footnotes, metadata */
+
+  /* Layout */
+  --sw-radius-md: 8px;
+  --sw-radius-sm: 5px;
 }
