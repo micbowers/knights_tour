@@ -67,6 +67,13 @@ a.sw-mark-link:focus-visible {
   font-size: 12px;
   color: var(--sw-text-on-dark-muted);
 }
+.sw-foot-link {
+  font-family: var(--sw-body);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sw-ember);
+}
+.sw-foot-link:hover { text-decoration: underline; opacity: 1; }
 
 /* ---------- PATTERN B — NUMBERED STEP PANEL ---------- */
 

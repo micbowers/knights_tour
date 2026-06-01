@@ -44,6 +44,7 @@ export function renderHome(root) {
         <span class="a">SPARK</span><span class="b">WORKS</span>
       </a>
       <div class="sw-foot-tag">School teaches content. We train how to think.</div>
+      <a class="sw-foot-link sw-mark-link" href="https://www.sparkworks.kids/practice" target="_blank" rel="noopener">More games &amp; practice &rarr;</a>
     </footer>
   `;
 

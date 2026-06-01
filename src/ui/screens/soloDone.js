@@ -62,6 +62,7 @@ export function renderDone(root) {
           </button>
           ${tour.size < 8 ? `<button id="same-btn" class="sw-btn" type="button">Same board again</button>` : ''}
           <button id="home-btn" class="sw-btn" type="button">Pick a different board</button>
+          <a class="sw-btn" href="https://www.sparkworks.kids/practice" target="_blank" rel="noopener">More games &amp; practice →</a>
         </div>
       </aside>
     </main>

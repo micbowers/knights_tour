@@ -1,7 +1,7 @@
 export default function handler(req, res) {
   res.status(200).json({
     ok: true,
-    service: 'findthealien',
+    service: 'knightstour',
     time: new Date().toISOString(),
   });
 }
